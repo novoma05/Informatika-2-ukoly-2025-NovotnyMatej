@@ -1,36 +1,66 @@
 import argparse
 import sys
+from datetime import datetime
+from typing import List
 from models import Product
 from storage import Storage
 
-# TODO: Implementovat dekorátor @log_action (zapsat do history.log)
+# Implementace dekorátoru @log_action
 def log_action(func):
     def wrapper(*args, **kwargs):
-        # ... logika logování ...
-        return func(*args, **kwargs)
+        # Zavoláme původní funkci
+        result = func(*args, **kwargs)
+        
+        # Získáme název akce (název metody)
+        action_name = func.__name__
+        
+        # Zápis do souboru
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = f"[{timestamp}] Akce: {action_name} | Args: {args[1:]} {kwargs}\n"
+        
+        with open("history.log", "a", encoding="utf-8") as f:
+            f.write(log_entry)
+            
+        return result
     return wrapper
 
 class InventoryManager:
     def __init__(self, storage: Storage):
         self.storage = storage
-        self.products = self.storage.load_products()
+        self.products: List[Product] = self.storage.load_products()
 
     @log_action
     def add_product(self, name: str, price: float, quantity: int):
-        # TODO: Vytvořit produkt, přidat do self.products, uložit
-        print(f"Produkt {name} přidán.")
+        try:
+            new_product = Product(name, price, quantity)
+            self.products.append(new_product)
+            self.storage.save_products(self.products)
+            print(f"Úspěch: Produkt '{name}' byl přidán.")
+        except ValueError as e:
+            print(f"Chyba: {e}")
 
     def list_products(self):
-        # TODO: Vypsat všechny produkty
-        pass
+        if not self.products:
+            print("Sklad je prázdný.")
+            return
+        
+        print(f"{'NÁZEV':<20} {'CENA':<10} {'MNOŽSTVÍ':<10} {'KATEGORIE'}")
+        print("-" * 55)
+        for p in self.products:
+            print(f"{p.name:<20} {p.price:<10} {p.quantity:<10} {p.category}")
 
     def search_products(self, query: str):
-        # TODO: Vyhledat produkty obsahující query v názvu
-        pass
+        found = [p for p in self.products if query.lower() in p.name.lower()]
+        if found:
+            print(f"Nalezeno {len(found)} produktů:")
+            for p in found:
+                print(p)
+        else:
+            print(f"Žádný produkt odpovídající '{query}' nebyl nalezen.")
     
     def total_value(self):
-        # TODO: Spočítat celkovou hodnotu
-        pass
+        total = sum(p.price * p.quantity for p in self.products)
+        print(f"Celková hodnota skladu: {total:,.2f} Kč")
 
 def main():
     parser = argparse.ArgumentParser(description="Systém správy skladu")
@@ -49,6 +79,9 @@ def main():
     search_parser = subparsers.add_parser("search", help="Hledat produkt")
     search_parser.add_argument("--query", required=True, help="Hledaný text")
 
+    # Příkaz 'total' (Chyběl v původním kódu)
+    subparsers.add_parser("total", help="Celková hodnota skladu")
+
     args = parser.parse_args()
     
     storage = Storage()
@@ -60,7 +93,8 @@ def main():
         manager.list_products()
     elif args.command == "search":
         manager.search_products(args.query)
-    # TODO: Další příkazy
+    elif args.command == "total":
+        manager.total_value()
     else:
         parser.print_help()
 
